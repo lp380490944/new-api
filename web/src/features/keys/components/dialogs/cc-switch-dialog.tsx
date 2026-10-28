@@ -68,6 +68,41 @@ function getServerAddress(): string {
   return window.location.origin
 }
 
+// fork: Codex 导入时附带 config.toml，开启 Responses WebSocket（自定义 provider 默认关闭）
+function tomlString(value: string): string {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
+
+function base64Utf8(text: string): string {
+  const bytes = new TextEncoder().encode(text)
+  let binary = ''
+  for (const b of bytes) binary += String.fromCharCode(b)
+  return btoa(binary)
+}
+
+function buildCodexConfig(
+  name: string,
+  endpoint: string,
+  model: string,
+  apiKey: string
+): string {
+  return [
+    'model_provider = "custom"',
+    `model = ${tomlString(model)}`,
+    'model_reasoning_effort = "high"',
+    'disable_response_storage = true',
+    '',
+    '[model_providers.custom]',
+    `name = ${tomlString(name)}`,
+    `base_url = ${tomlString(endpoint)}`,
+    'wire_api = "responses"',
+    'requires_openai_auth = false',
+    `experimental_bearer_token = ${tomlString(apiKey)}`,
+    'supports_websockets = true',
+    '',
+  ].join('\n')
+}
+
 function buildCCSwitchURL(
   app: string,
   name: string,
@@ -86,6 +121,13 @@ function buildCCSwitchURL(
     if (v) params.set(k, v)
   }
   params.set('homepage', serverAddress)
+  if (app === 'codex' && models.model) {
+    params.set('configFormat', 'toml')
+    params.set(
+      'config',
+      base64Utf8(buildCodexConfig(name, endpoint, models.model, apiKey))
+    )
+  }
   params.set('enabled', 'true')
   return `ccswitch://v1/import?${params.toString()}`
 }
